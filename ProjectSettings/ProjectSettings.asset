@@ -12,8 +12,8 @@ PlayerSettings:
   targetDevice: 2
   useOnDemandResources: 0
   accelerometerFrequency: 60
-  companyName: DefaultCompany
-  productName: csci-526-section-2
+  companyName: JuiceBox
+  productName: qikuns-cube
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -926,11 +926,11 @@ PlayerSettings:
   captureStartupLogs: {}
   activeInputHandler: 2
   windowsGamepadBackendHint: 0
-  cloudProjectId: b6207db5-8e7d-459e-a713-9ba82ff49caf
+  cloudProjectId: 30aeb078-d10b-4baa-997a-4cbd2cee3aca
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
-  projectName: csci-526-section-2
-  organizationId: jmshi
+  projectName: qikuns-cube
+  organizationId: juice-box-de48e6bd-4ccd-44ba-88ce-f5b507975585
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0
   hmiLoadingImage: {fileID: 0}
