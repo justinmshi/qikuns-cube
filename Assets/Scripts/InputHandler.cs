@@ -3,7 +3,11 @@ using UnityEngine.InputSystem;
 
 public class InputHandler: MonoBehaviour {
   private void Update() {
-    if (!Cube.Instance.Initialized) {
+    if (LevelSaveUI.Instance?.IsFocused ?? false) {
+      return;
+    }
+
+    if (!Cube.Instance.IsLoaded) {
       return;
     }
 
@@ -19,7 +23,6 @@ public class InputHandler: MonoBehaviour {
       Cube.Instance.EndCubeRotation();
     }
 
-    // TODO: minimum threshold?
     Vector2 mouseDelta = Mouse.current.delta.ReadValue();
 
     if (mouseDelta.sqrMagnitude > 0) {
@@ -52,24 +55,22 @@ public class InputHandler: MonoBehaviour {
       } else if (Keyboard.current.dKey.wasPressedThisFrame) {
         Cube.Instance.SetHoveredSubCubeSquare(Square.None);
         Cube.Instance.SetHoveredSubCubeSpecialSquare(SpecialSquare.None);
-      } else if (Keyboard.current.spaceKey.wasPressedThisFrame) {
-        Cube.Instance.WriteLevelToFile();
       } else if (Keyboard.current.digit2Key.wasPressedThisFrame) {
-        Cube.Instance.ResetEditor(2);
+        Cube.Instance.Clear(2);
       } else if (Keyboard.current.digit3Key.wasPressedThisFrame) {
-        Cube.Instance.ResetEditor(3);
+        Cube.Instance.Clear(3);
       } else if (Keyboard.current.digit4Key.wasPressedThisFrame) {
-        Cube.Instance.ResetEditor(4);
+        Cube.Instance.Clear(4);
       } else if (Keyboard.current.digit5Key.wasPressedThisFrame) {
-        Cube.Instance.ResetEditor(5);
+        Cube.Instance.Clear(5);
       } else if (Keyboard.current.digit6Key.wasPressedThisFrame) {
-        Cube.Instance.ResetEditor(6);
+        Cube.Instance.Clear(6);
       } else if (Keyboard.current.digit7Key.wasPressedThisFrame) {
-        Cube.Instance.ResetEditor(7);
+        Cube.Instance.Clear(7);
       } else if (Keyboard.current.digit8Key.wasPressedThisFrame) {
-        Cube.Instance.ResetEditor(8);
+        Cube.Instance.Clear(8);
       } else if (Keyboard.current.digit9Key.wasPressedThisFrame) {
-        Cube.Instance.ResetEditor(9);
+        Cube.Instance.Clear(9);
       }
     } else {
       if (Keyboard.current.spaceKey.wasPressedThisFrame) {

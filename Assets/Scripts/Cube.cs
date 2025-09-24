@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -23,14 +22,17 @@ public class Cube: MonoBehaviour {
 
   public static Cube Instance { get; private set; }
 
-  public bool Initialized => _subCubes != null;
+  public bool IsLoaded => _subCubes != null;
 
   private const float SubCubeSize = 1f;
   private const float SubCubeGap = 0.1f;
   private const float RoundLayerDuration = 0.1f;
+  private const float SelectLayerDragThreshold = 3f;
 
   [SerializeField]
   private SubCube _subCubePrefab;
+
+  private readonly List<StartNode> _starts = new();
 
   private SubCube[,,] _subCubes;
   private SubCubeSelection? _selectedSubCube;
@@ -38,8 +40,8 @@ public class Cube: MonoBehaviour {
   private LayerSelection? _selectedLayer;
   private float _totalLayerRotation;
   private Coroutine _unselectCoroutine;
-  private StartNode _start;
   private int _size;
+  private Quaternion _startRotation;
 
   public void SelectSubCube() {
     if (_isRotatingCube || _selectedSubCube != null || _selectedLayer != null || _unselectCoroutine != null) {
@@ -77,7 +79,10 @@ public class Cube: MonoBehaviour {
   public void Drag(Vector2 delta) {
     if (_selectedSubCube != null && _unselectCoroutine == null) {
       if (_selectedLayer == null) {
-        SelectLayer(delta);
+        // TODO: improve layer selection
+        if (delta.sqrMagnitude > SelectLayerDragThreshold) {
+          SelectLayer(delta);
+        }
       } else {
         RotateLayer(delta);
       }
@@ -93,45 +98,55 @@ public class Cube: MonoBehaviour {
       return;
     }
 
-    Side startCubeSide = _start.SubCube.SubCubeSideToCubeSide(_start.SubCubeSide);
-    Square square = _start.SubCube.GetSquare(startCubeSide);
-    bool[,,,] seen = new bool[_size, _size, _size, Enum.GetValues(typeof(Side)).Length];
-    bool pass = false;
+    bool overallPass = true;
 
-    Queue<SubCubeSelection> bfsQueue = new();
+    foreach (StartNode startNode in _starts) {
+      Side startCubeSide = startNode.SubCube.SubCubeSideToCubeSide(startNode.SubCubeSide);
+      Square square = startNode.SubCube.GetSquare(startCubeSide);
+      bool[,,,] seen = new bool[_size, _size, _size, Enum.GetValues(typeof(Side)).Length];
+      bool startNodePass = false;
 
-    bfsQueue.Enqueue(new() {
-      SubCube = _start.SubCube,
-      CubeSide = startCubeSide
-    });
+      Queue<SubCubeSelection> bfsQueue = new();
 
-    while (bfsQueue.Count > 0) {
-      SubCubeSelection node = bfsQueue.Dequeue();
+      bfsQueue.Enqueue(new() {
+        SubCube = startNode.SubCube,
+        CubeSide = startCubeSide
+      });
 
-      seen[node.SubCube.I, node.SubCube.J, node.SubCube.K, (int) node.CubeSide] = true;
+      while (bfsQueue.Count > 0) {
+        SubCubeSelection node = bfsQueue.Dequeue();
 
-      if (node.SubCube.GetSpecialSquare(node.CubeSide) == SpecialSquare.End) {
-        pass = true;
+        seen[node.SubCube.I, node.SubCube.J, node.SubCube.K, (int) node.CubeSide] = true;
+
+        if (node.SubCube.GetSpecialSquare(node.CubeSide) == SpecialSquare.End) {
+          startNodePass = true;
+
+          break;
+        }
+
+        SubCubeSelection[] neighbors = GetNeighbors(node);
+
+        foreach (SubCubeSelection neighbor in neighbors) {
+          if (seen[neighbor.SubCube.I, neighbor.SubCube.J, neighbor.SubCube.K, (int) neighbor.CubeSide]) {
+            continue;
+          }
+
+          if (neighbor.SubCube.GetSquare(neighbor.CubeSide) != square) {
+            continue;
+          }
+
+          bfsQueue.Enqueue(neighbor);
+        }
+      }
+
+      if (!startNodePass) {
+        overallPass = false;
 
         break;
       }
-
-      SubCubeSelection[] neighbors = GetNeighbors(node);
-
-      foreach (SubCubeSelection neighbor in neighbors) {
-        if (seen[neighbor.SubCube.I, neighbor.SubCube.J, neighbor.SubCube.K, (int) neighbor.CubeSide]) {
-          continue;
-        }
-
-        if (neighbor.SubCube.GetSquare(neighbor.CubeSide) != square) {
-          continue;
-        }
-
-        bfsQueue.Enqueue(neighbor);
-      }
     }
 
-    NotificationUI.Instance.Notify(pass ? "Pass" : "Fail", pass ? Color.green : Color.red);
+    NotificationUI.Instance.Notify(overallPass ? "Pass" : "Fail", overallPass ? Color.green : Color.red);
   }
 
   public void SetHoveredSubCubeSquare(Square square) {
@@ -146,12 +161,7 @@ public class Cube: MonoBehaviour {
     }
   }
 
-  public void WriteLevelToFile() {
-    // TODO: non-editor support
-    if (!Application.isEditor || string.IsNullOrEmpty(GameManager.Instance.LevelFileName)) {
-      return;
-    }
-
+  public Level GetLevel() {
     Level level = new(_size);
 
     for (int i = 0; i < _size; i++) {
@@ -172,14 +182,17 @@ public class Cube: MonoBehaviour {
       }
     }
 
-    string levelJSON = JsonUtility.ToJson(level, true);
-
-    File.WriteAllText($"{Application.dataPath}/Resources/Levels/{GameManager.Instance.LevelFileName}.json", levelJSON);
-
-    NotificationUI.Instance.Notify("Write", Color.green);
+    return level;
   }
 
-  public void ResetEditor(int size) {
+  public void Clear(int size) {
+    Level level = new(size);
+    level.SetSpecialSquare(0, 0, 0, Side.Near, SpecialSquare.Start);
+
+    Load(level);
+  }
+
+  public void Load(Level level) {
     if (_selectedSubCube != null || _selectedLayer != null || _unselectCoroutine != null) {
       return;
     }
@@ -188,25 +201,53 @@ public class Cube: MonoBehaviour {
       Destroy(child.gameObject);
     }
 
-    Level level = new(size);
-    level.SetSpecialSquare(0, 0, 0, Side.Near, SpecialSquare.Start);
+    _size = level.Size;
+    _subCubes = new SubCube[_size, _size, _size];
+    _starts.Clear();
+    transform.localRotation = _startRotation;
 
-    Initialize(level);
-  }
+    float bound = (_size - 1) / 2f;
 
-  public void LoadLevel() {
-    if (_selectedSubCube != null || _selectedLayer != null || _unselectCoroutine != null || string.IsNullOrEmpty(GameManager.Instance.LevelFileName)) {
-      return;
+    for (int i = 0; i < _size; i++) {
+      for (int j = 0; j < _size; j++) {
+        bool border = i == 0 || i == _size - 1 || j == 0 || j == _size - 1;
+
+        for (int k = 0; k < _size; k++) {
+          if (!border && k != 0 && k != _size - 1) {
+            continue;
+          }
+
+          SubCube subCube = Instantiate(_subCubePrefab);
+          subCube.transform.localScale = new(SubCubeSize, SubCubeSize, SubCubeSize);
+          subCube.transform.localPosition = new(
+            (-bound + j) * (SubCubeSize + SubCubeGap),
+            (bound - i) * (SubCubeSize + SubCubeGap),
+            (-bound + k) * (SubCubeSize + SubCubeGap)
+          );
+          subCube.I = i;
+          subCube.J = j;
+          subCube.K = k;
+          subCube.transform.SetParent(transform, false);
+
+          foreach (Side side in Enum.GetValues(typeof(Side))) {
+            Square square = level.GetSquare(i, j, k, side);
+            SpecialSquare specialSquare = level.GetSpecialSquare(i, j, k, side);
+
+            subCube.SetSquare(side, square);
+            subCube.SetSpecialSquare(side, specialSquare);
+
+            if (specialSquare == SpecialSquare.Start) {
+              _starts.Add(new() {
+                SubCube = subCube,
+                SubCubeSide = side
+              });
+            }
+          }
+
+          _subCubes[i, j, k] = subCube;
+        }
+      }
     }
-
-    foreach (Transform child in transform) {
-      Destroy(child.gameObject);
-    }
-
-    TextAsset levelFile = Resources.Load<TextAsset>($"Levels/{GameManager.Instance.LevelFileName}");
-    Level level = JsonUtility.FromJson<Level>(levelFile.text);
-
-    Initialize(level);
   }
 
   private bool GetHoveredSubCube(out SubCube subCube, out Side cubeSide) {
@@ -571,63 +612,17 @@ public class Cube: MonoBehaviour {
     _selectedLayer.Value.Transform.Rotate(cubeWorldRotationAxis, rotation, Space.World);
   }
 
-  private void Initialize(Level level) {
-    _size = level.Size;
-    _subCubes = new SubCube[_size, _size, _size];
-
-    float bound = (_size - 1) / 2f;
-
-    for (int i = 0; i < _size; i++) {
-      for (int j = 0; j < _size; j++) {
-        bool border = i == 0 || i == _size - 1 || j == 0 || j == _size - 1;
-
-        for (int k = 0; k < _size; k++) {
-          if (!border && k != 0 && k != _size - 1) {
-            continue;
-          }
-
-          SubCube subCube = Instantiate(_subCubePrefab);
-          subCube.transform.localScale = new(SubCubeSize, SubCubeSize, SubCubeSize);
-          subCube.transform.localPosition = new(
-            (-bound + j) * (SubCubeSize + SubCubeGap),
-            (bound - i) * (SubCubeSize + SubCubeGap),
-            (-bound + k) * (SubCubeSize + SubCubeGap)
-          );
-          subCube.I = i;
-          subCube.J = j;
-          subCube.K = k;
-          subCube.transform.SetParent(transform, false);
-
-          foreach (Side side in Enum.GetValues(typeof(Side))) {
-            Square square = level.GetSquare(i, j, k, side);
-            SpecialSquare specialSquare = level.GetSpecialSquare(i, j, k, side);
-
-            subCube.SetSquare(side, square);
-            subCube.SetSpecialSquare(side, specialSquare);
-
-            if (specialSquare == SpecialSquare.Start) {
-              _start = new() {
-                SubCube = subCube,
-                SubCubeSide = side
-              };
-            }
-          }
-
-          _subCubes[i, j, k] = subCube;
-        }
-      }
-    }
-  }
-
   private void Awake() {
     Instance = this;
+
+    _startRotation = transform.localRotation;
   }
 
   private void Start() {
     if (GameManager.Instance.IsLevelEditor) {
-      ResetEditor(3);
+      Clear(3);
     } else {
-      LoadLevel();
+      Load(GameManager.Instance.GetBuiltInLevel(0));
     }
   }
 }

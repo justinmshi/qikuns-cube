@@ -1,0 +1,17 @@
+VisualElement {
+  flex-direction: row;
+  position: absolute;
+  right: 0px;
+}
+
+#level-name-text-field {
+  -unity-font-definition: url("/Assets/Fonts/RubikMonoOne-Regular.ttf");
+  font-size: 12px;
+  width: 256px;
+}
+
+#save-level-button {
+  -unity-font-definition: url("/Assets/Fonts/RubikMonoOne-Regular.ttf");
+  font-size: 12px;
+  width: 128px;
+}

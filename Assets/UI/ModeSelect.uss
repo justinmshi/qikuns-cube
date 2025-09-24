@@ -1,0 +1,11 @@
+VisualElement {
+  position: absolute;
+  right: 0px;
+  bottom: 0px;
+}
+
+#switch-mode-button {
+  -unity-font-definition: url("/Assets/Fonts/RubikMonoOne-Regular.ttf");
+  font-size: 12px;
+  width: 256px;
+}
